@@ -1,6 +1,8 @@
 on:
   release:
     types: [published]
+  workflow_dispatch:
+
 name: Build Release Binary (Linux)
 jobs:
   build:
@@ -10,13 +12,13 @@ jobs:
       contents: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
       - name: Install dependencies
         run: sudo apt install libssl-dev
       - name: Build binary
         run: make
       - name: Upload release artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: git-crypt-artifacts
           path: git-crypt
@@ -28,19 +30,26 @@ jobs:
       contents: write
     steps:
       - name: Download release artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: git-crypt-artifacts
       - name: Upload release asset
-        uses: actions/github-script@v6
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const fs = require("fs").promises;
-            const { repo: { owner, repo }, sha } = context;
+            const fs = require('fs').promises;
+
+            if (!context.payload.release)
+            {
+              core.notice('Not a release');
+              return;
+            }
+
             await github.rest.repos.uploadReleaseAsset({
-              owner, repo,
-              release_id: ${{ github.event.release.id }},
-              name: 'git-crypt-${{ github.event.release.name }}-linux-x86_64',
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: context.payload.release.id,
+              name: `git-crypt-${context.payload.release.tag_name}-linux-x86_64`,
               data: await fs.readFile('git-crypt'),
             });

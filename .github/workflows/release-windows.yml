@@ -1,6 +1,8 @@
 on:
   release:
     types: [published]
+  workflow_dispatch:
+
 name: Build Release Binary (Windows)
 jobs:
   build:
@@ -10,7 +12,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
       - name: Setup msys2
         uses: msys2/setup-msys2@v2
         with:
@@ -24,9 +26,9 @@ jobs:
             openssl-devel
       - name: Build binary
         shell: msys2 {0}
-        run: make LDFLAGS="-static-libstdc++ -static -lcrypto -lws2_32 -lcrypt32"
+        run: make LDFLAGS="-static-libstdc++ -static -lcrypto -lws2_32 -lcrypt32" ENABLE_MAN=no
       - name: Upload release artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: git-crypt-artifacts
           path: git-crypt.exe
@@ -38,19 +40,26 @@ jobs:
       contents: write
     steps:
       - name: Download release artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: git-crypt-artifacts
       - name: Upload release asset
-        uses: actions/github-script@v6
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const fs = require("fs").promises;
-            const { repo: { owner, repo }, sha } = context;
+            const fs = require('fs').promises;
+
+            if (!context.payload.release)
+            {
+              core.notice('Not a release');
+              return;
+            }
+
             await github.rest.repos.uploadReleaseAsset({
-              owner, repo,
-              release_id: ${{ github.event.release.id }},
-              name: 'git-crypt-${{ github.event.release.name }}-x86_64.exe',
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: context.payload.release.id,
+              name: `git-crypt-${context.payload.release.tag_name}-x86_64.exe`,
               data: await fs.readFile('git-crypt.exe'),
             });
